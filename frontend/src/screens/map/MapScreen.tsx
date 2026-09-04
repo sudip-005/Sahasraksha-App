@@ -1,11 +1,19 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator } from 'react-native';
-import Svg, { Defs, LinearGradient, Stop, Rect, Path, G, Text as SvgText } from 'react-native-svg';
+import React, { useState, useMemo, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  TextInput,
+  ActivityIndicator,
+} from 'react-native';
+import { WebView } from 'react-native-webview';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useStations } from '../../hooks/useStations';
 import { AppHeader } from '../../components/common/AppHeader';
 import { Colors, Typography, Spacing } from '../../theme';
-import { StationMapPoint, StationStatus } from '../../types';
+import { StationMapPoint } from '../../types';
 
 interface MapStationNode {
   id: string;
@@ -18,16 +26,8 @@ interface MapStationNode {
   pressure: string;
   humidity: string;
   healthScore: number;
-  topPct: number;
-  leftPct: number;
-}
-
-// Convert GPS coordinates to percentage position on India SVG canvas
-function projectGpsToMap(lat: number, lon: number): { topPct: number; leftPct: number } {
-  // Calibrated linear projection for the India SVG silhouette in 400x460 viewBox
-  const topPct = Math.max(6, Math.min(94, -3.155 * lat + 116.26));
-  const leftPct = Math.max(8, Math.min(92, 2.253 * lon - 130.08));
-  return { topPct, leftPct };
+  latitude: number;
+  longitude: number;
 }
 
 const DEFAULT_STATIONS: MapStationNode[] = [
@@ -42,8 +42,8 @@ const DEFAULT_STATIONS: MapStationNode[] = [
     pressure: '998.2 hPa',
     humidity: '34%',
     healthScore: 42.1,
-    topPct: 26,
-    leftPct: 45,
+    latitude: 28.61,
+    longitude: 77.20,
   },
   {
     id: 'AWS_JAI',
@@ -56,8 +56,8 @@ const DEFAULT_STATIONS: MapStationNode[] = [
     pressure: '1010.5 hPa',
     humidity: '42%',
     healthScore: 96.5,
-    topPct: 31,
-    leftPct: 38,
+    latitude: 26.92,
+    longitude: 75.82,
   },
   {
     id: 'AWS_LKO',
@@ -70,8 +70,8 @@ const DEFAULT_STATIONS: MapStationNode[] = [
     pressure: '1011.8 hPa',
     humidity: '58%',
     healthScore: 97.2,
-    topPct: 29,
-    leftPct: 54,
+    latitude: 26.85,
+    longitude: 80.95,
   },
   {
     id: 'AWS_PNQ',
@@ -84,8 +84,8 @@ const DEFAULT_STATIONS: MapStationNode[] = [
     pressure: '1008.4 hPa',
     humidity: '68%',
     healthScore: 91.2,
-    topPct: 61,
-    leftPct: 39,
+    latitude: 18.52,
+    longitude: 73.86,
   },
   {
     id: 'AWS_BOM',
@@ -98,8 +98,8 @@ const DEFAULT_STATIONS: MapStationNode[] = [
     pressure: '1012.0 hPa',
     humidity: '79%',
     healthScore: 98.4,
-    topPct: 58,
-    leftPct: 34,
+    latitude: 18.90,
+    longitude: 72.82,
   },
   {
     id: 'AWS_HYD',
@@ -112,8 +112,8 @@ const DEFAULT_STATIONS: MapStationNode[] = [
     pressure: '1006.1 hPa',
     humidity: '52%',
     healthScore: 61.0,
-    topPct: 63,
-    leftPct: 49,
+    latitude: 17.38,
+    longitude: 78.49,
   },
   {
     id: 'AWS_BLR',
@@ -126,8 +126,8 @@ const DEFAULT_STATIONS: MapStationNode[] = [
     pressure: '1014.2 hPa',
     humidity: '62%',
     healthScore: 99.1,
-    topPct: 74,
-    leftPct: 45,
+    latitude: 12.97,
+    longitude: 77.59,
   },
   {
     id: 'AWS_CHN',
@@ -140,8 +140,8 @@ const DEFAULT_STATIONS: MapStationNode[] = [
     pressure: '1009.6 hPa',
     humidity: '82%',
     healthScore: 88.0,
-    topPct: 75,
-    leftPct: 51,
+    latitude: 13.08,
+    longitude: 80.27,
   },
   {
     id: 'AWS_CCU',
@@ -154,8 +154,8 @@ const DEFAULT_STATIONS: MapStationNode[] = [
     pressure: '1010.9 hPa',
     humidity: '74%',
     healthScore: 95.8,
-    topPct: 46,
-    leftPct: 69,
+    latitude: 22.57,
+    longitude: 88.36,
   },
   {
     id: 'AWS_GUW',
@@ -168,10 +168,246 @@ const DEFAULT_STATIONS: MapStationNode[] = [
     pressure: '-- hPa',
     humidity: '--%',
     healthScore: 0.0,
-    topPct: 35,
-    leftPct: 81,
+    latitude: 26.14,
+    longitude: 91.74,
   },
 ];
+
+function buildLeafletHTML(stations: MapStationNode[], activeLayer: string): string {
+  const stationsJson = JSON.stringify(
+    stations.map((s) => ({
+      id: s.id,
+      code: s.code,
+      name: s.name,
+      city: s.city,
+      status: s.status,
+      temp: s.temp,
+      pressure: s.pressure,
+      humidity: s.humidity,
+      healthScore: s.healthScore,
+      lat: s.latitude,
+      lng: s.longitude,
+    }))
+  );
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body, #map { width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .leaflet-control-zoom { display: none; }
+    .leaflet-control-attribution { font-size: 8px; opacity: 0.5; }
+
+    /* Custom station marker */
+    .station-marker {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .station-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2.5px solid #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+    .station-dot:hover { transform: scale(1.3); }
+    .station-dot.healthy  { background: #10B981; }
+    .station-dot.monitor  { background: #F59E0B; }
+    .station-dot.service  { background: #DC2626; box-shadow: 0 0 0 4px rgba(220,38,38,0.25), 0 2px 8px rgba(0,0,0,0.3); }
+    .station-dot.nodata   { background: #94A3B8; }
+    .station-dot.selected { transform: scale(1.5); border-color: #3B82F6; box-shadow: 0 0 0 5px rgba(59,130,246,0.3), 0 2px 10px rgba(0,0,0,0.4); }
+
+    .station-label {
+      margin-top: 3px;
+      background: rgba(255,255,255,0.95);
+      color: #1e293b;
+      font-size: 9px;
+      font-weight: 800;
+      padding: 1px 5px;
+      border-radius: 4px;
+      white-space: nowrap;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.12);
+      letter-spacing: 0.3px;
+    }
+    .station-label.service { color: #DC2626; }
+    .station-label.nodata  { color: #94A3B8; }
+
+    /* Popup styles */
+    .leaflet-popup-content-wrapper {
+      border-radius: 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+      border: 1px solid rgba(218,226,253,0.8);
+      padding: 0;
+      overflow: hidden;
+    }
+    .leaflet-popup-content { margin: 0; width: 220px !important; }
+    .leaflet-popup-tip-container { display: none; }
+
+    .popup-card {
+      padding: 14px;
+      background: #fff;
+    }
+    .popup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .popup-code { font-size: 15px; font-weight: 800; color: #1e293b; }
+    .popup-badge {
+      font-size: 9px;
+      font-weight: 800;
+      padding: 2px 7px;
+      border-radius: 99px;
+      letter-spacing: 0.4px;
+    }
+    .popup-badge.healthy { background: rgba(16,185,129,0.12); color: #059669; }
+    .popup-badge.monitor { background: rgba(245,158,11,0.15); color: #B45309; }
+    .popup-badge.service { background: rgba(220,38,38,0.12); color: #DC2626; }
+    .popup-badge.nodata  { background: #f1f5f9; color: #94A3B8; }
+    .popup-city { font-size: 11px; color: #64748b; margin-bottom: 10px; }
+    .popup-stats {
+      display: flex;
+      justify-content: space-around;
+      background: rgba(242,243,255,0.7);
+      border-radius: 8px;
+      padding: 8px 4px;
+    }
+    .popup-stat { text-align: center; }
+    .popup-stat-val { font-size: 13px; font-weight: 800; color: #1e293b; }
+    .popup-stat-lbl { font-size: 9px; color: #64748b; margin-top: 1px; }
+    .popup-divider { width: 1px; background: rgba(218,226,253,0.8); }
+    .popup-health {
+      font-size: 22px;
+      font-weight: 800;
+      text-align: center;
+      margin: 8px 0 4px;
+    }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+<script>
+  var stations = ${stationsJson};
+  var activeLayer = "${activeLayer}";
+
+  var colorMap = {
+    healthy: '#10B981',
+    monitor: '#F59E0B',
+    service: '#DC2626',
+    nodata: '#94A3B8',
+  };
+
+  // Initialise Leaflet with CartoDB Positron (clean, premium look)
+  var map = L.map('map', {
+    center: [22.5, 82.5],
+    zoom: 5,
+    zoomControl: false,
+    attributionControl: true,
+  });
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 19,
+  }).addTo(map);
+
+  var selectedId = null;
+  var markerMap = {};
+
+  function getBadgeLabel(st) {
+    if (activeLayer === 'temp') return st.temp;
+    if (activeLayer === 'pressure') return st.pressure.replace(' hPa', '') + ' hPa';
+    if (activeLayer === 'reporting') return st.healthScore.toFixed(0) + '%';
+    if (st.status === 'nodata') return 'NO DATA';
+    return st.code;
+  }
+
+  function createMarker(st) {
+    var showLabel = activeLayer !== 'health' || st.status === 'nodata';
+    var labelClass = 'station-label ' + (st.status === 'service' || st.status === 'nodata' ? st.status : '');
+
+    var html = '<div class="station-marker">' +
+      '<div class="station-dot ' + st.status + '" id="dot-' + st.id + '"></div>' +
+      (showLabel ? '<div class="' + labelClass + '">' + getBadgeLabel(st) + '</div>' : '') +
+    '</div>';
+
+    var icon = L.divIcon({
+      html: html,
+      className: '',
+      iconSize: [32, 36],
+      iconAnchor: [7, 7],
+    });
+
+    var marker = L.marker([st.lat, st.lng], { icon: icon });
+
+    marker.on('click', function() {
+      selectStation(st.id);
+      window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'SELECT', id: st.id }));
+    });
+
+    var healthColor = colorMap[st.status];
+    var popupContent =
+      '<div class="popup-card">' +
+        '<div class="popup-header">' +
+          '<span class="popup-code">' + st.code + '</span>' +
+          '<span class="popup-badge ' + st.status + '">' + st.status.toUpperCase() + '</span>' +
+        '</div>' +
+        '<div class="popup-city">' + st.city + '</div>' +
+        '<div class="popup-health" style="color:' + healthColor + '">' +
+          (st.healthScore > 0 ? st.healthScore.toFixed(1) + '%' : '--') +
+        '</div>' +
+        '<div style="font-size:9px;text-align:center;color:#64748b;margin-bottom:8px">Health Score</div>' +
+        '<div class="popup-stats">' +
+          '<div class="popup-stat"><div class="popup-stat-val">' + st.temp + '</div><div class="popup-stat-lbl">Temp</div></div>' +
+          '<div class="popup-divider"></div>' +
+          '<div class="popup-stat"><div class="popup-stat-val">' + st.pressure + '</div><div class="popup-stat-lbl">Pressure</div></div>' +
+          '<div class="popup-divider"></div>' +
+          '<div class="popup-stat"><div class="popup-stat-val">' + st.humidity + '</div><div class="popup-stat-lbl">Humidity</div></div>' +
+        '</div>' +
+      '</div>';
+
+    marker.bindPopup(popupContent, { maxWidth: 240, minWidth: 220 });
+
+    return marker;
+  }
+
+  function selectStation(id) {
+    // Reset previous
+    if (selectedId && markerMap[selectedId]) {
+      var prevDot = document.getElementById('dot-' + selectedId);
+      if (prevDot) prevDot.classList.remove('selected');
+    }
+    selectedId = id;
+    var dot = document.getElementById('dot-' + id);
+    if (dot) dot.classList.add('selected');
+  }
+
+  stations.forEach(function(st) {
+    var m = createMarker(st);
+    m.addTo(map);
+    markerMap[st.id] = m;
+  });
+
+  // Auto-select Pune on load
+  setTimeout(function() {
+    var puneStation = stations.find(function(s) { return s.id === 'AWS_PNQ'; });
+    if (puneStation && markerMap['AWS_PNQ']) {
+      selectStation('AWS_PNQ');
+      markerMap['AWS_PNQ'].openPopup();
+    }
+  }, 800);
+</script>
+</body>
+</html>`;
+}
 
 interface MapScreenProps {
   navigation: any;
@@ -182,14 +418,12 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const [activeLayer, setActiveLayer] = useState<'health' | 'temp' | 'pressure' | 'reporting'>('health');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
-  const [selectedStation, setSelectedStation] = useState<MapStationNode>(DEFAULT_STATIONS[3]); // default AWS_PNQ
+  const [selectedStation, setSelectedStation] = useState<MapStationNode>(DEFAULT_STATIONS[3]);
+  const webViewRef = useRef<any>(null);
 
-  // Convert backend map points to MapStationNode items using GPS coordinates
-  const displayStations = useMemo(() => {
+  const displayStations = useMemo((): MapStationNode[] => {
     if (mapPoints && mapPoints.length > 0) {
-      return mapPoints.map((pt: StationMapPoint) => {
-        const { topPct, leftPct } = projectGpsToMap(pt.latitude, pt.longitude);
-
+      return mapPoints.map((pt: StationMapPoint): MapStationNode => {
         let statusKey: MapStationNode['status'] = 'healthy';
         if (pt.status === 'SERVICE_NOW') statusKey = 'service';
         else if (pt.status === 'MONITOR') statusKey = 'monitor';
@@ -213,17 +447,14 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           pressure: pt.current_pressure !== null && pt.current_pressure !== undefined ? `${pt.current_pressure.toFixed(1)} hPa` : '1010 hPa',
           humidity: '65%',
           healthScore: pt.health_score || 95.0,
-          topPct,
-          leftPct,
+          latitude: pt.latitude,
+          longitude: pt.longitude,
         };
       });
     }
-
-    // Fallback to default stations if backend has no points yet
     return DEFAULT_STATIONS;
   }, [mapPoints]);
 
-  // Filter stations based on search query
   const filteredStations = useMemo(() => {
     if (!searchQuery.trim()) return displayStations;
     const q = searchQuery.toLowerCase();
@@ -237,22 +468,26 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
 
   const getNodeColor = (status: MapStationNode['status']) => {
     switch (status) {
-      case 'healthy':
-        return Colors.healthy;
-      case 'monitor':
-        return '#F59E0B';
-      case 'service':
-        return Colors.serviceNow;
-      case 'nodata':
-        return Colors.outline;
+      case 'healthy': return Colors.healthy;
+      case 'monitor': return '#F59E0B';
+      case 'service': return Colors.serviceNow;
+      case 'nodata': return Colors.outline;
     }
   };
 
-  const getLayerBadgeContent = (st: MapStationNode) => {
-    if (activeLayer === 'temp') return st.temp;
-    if (activeLayer === 'pressure') return st.pressure.replace(' hPa', '');
-    if (activeLayer === 'reporting') return `${st.healthScore.toFixed(0)}%`;
-    return st.status === 'nodata' ? 'NO DATA' : st.code;
+  const leafletHtml = useMemo(
+    () => buildLeafletHTML(filteredStations, activeLayer),
+    [filteredStations, activeLayer]
+  );
+
+  const handleWebViewMessage = (event: any) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'SELECT') {
+        const found = displayStations.find((s) => s.id === data.id);
+        if (found) setSelectedStation(found);
+      }
+    } catch (_) {}
   };
 
   return (
@@ -264,7 +499,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
       />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Top Bar Header */}
+        {/* Top Bar */}
         <View style={styles.topSection}>
           <View style={styles.titleRow}>
             <View>
@@ -300,7 +535,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
             </View>
           </View>
 
-          {/* Search bar when toggled */}
           {showSearch && (
             <View style={styles.searchBar}>
               <MaterialCommunityIcons name="magnify" size={18} color={Colors.outline} />
@@ -320,17 +554,16 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
             </View>
           )}
 
-          {/* Apple Weather Segmented Control Pill */}
+          {/* Layer Selector */}
           <View style={styles.segmentedControl}>
             {(['health', 'temp', 'pressure', 'reporting'] as const).map((layer) => {
               const labels: Record<typeof layer, string> = {
                 health: 'HEALTH',
-                temp: 'TEMPERATURE',
+                temp: 'TEMP',
                 pressure: 'PRESSURE',
                 reporting: 'REPORTING',
               };
               const isActive = activeLayer === layer;
-
               return (
                 <TouchableOpacity
                   key={layer}
@@ -347,164 +580,37 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Map Surface Canvas matching Stitch UI */}
+        {/* Leaflet Map WebView */}
         <View style={styles.mapCanvas}>
-          {/* High-Fidelity Apple Maps / Atmospheric Stylized India Map Canvas with Topo & Isobars */}
-          <Svg width="100%" height={440} viewBox="0 0 400 460" preserveAspectRatio="xMidYMid slice">
-            <Defs>
-              <LinearGradient id="oceanGlow" x1="0" y1="0" x2="0" y2="1">
-                <Stop offset="0%" stopColor="#F0F9FF" stopOpacity="0.85" />
-                <Stop offset="100%" stopColor="#E0F2FE" stopOpacity="0.95" />
-              </LinearGradient>
-              <LinearGradient id="topoHills" x1="0" y1="0" x2="1" y2="1">
-                <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.95" />
-                <Stop offset="100%" stopColor="#E2E8F0" stopOpacity="0.5" />
-              </LinearGradient>
-            </Defs>
+          <WebView
+            ref={webViewRef}
+            source={{ html: leafletHtml }}
+            style={styles.webView}
+            onMessage={handleWebViewMessage}
+            javaScriptEnabled
+            originWhitelist={['*']}
+            scrollEnabled={false}
+            showsVerticalScrollIndicator={false}
+            showsHorizontalScrollIndicator={false}
+          />
 
-            {/* Ocean backdrop */}
-            <Rect width="400" height="460" fill="url(#oceanGlow)" />
-
-            {/* Atmospheric Isobars & Topographic Contours */}
-            <G stroke="#93CCFF" strokeDasharray="3,3" strokeOpacity="0.45" strokeWidth="0.8">
-              <Path d="M-10 110 C 80 80, 220 140, 410 70" />
-              <Path d="M-10 180 C 110 160, 240 220, 410 170" />
-              <Path d="M-10 270 C 130 240, 260 300, 410 240" />
-              <Path d="M-10 360 C 100 340, 250 380, 410 330" />
-            </G>
-
-            {/* India Landmass Silhouette Shape */}
-            <Path
-              d="M178 35 
-                 C190 28, 205 32, 214 44
-                 C226 56, 238 65, 232 82
-                 C225 100, 242 110, 262 116
-                 C290 125, 330 134, 340 148
-                 C350 160, 360 172, 336 182
-                 C318 190, 300 186, 286 195
-                 C275 202, 268 214, 252 225
-                 C244 231, 235 240, 234 252
-                 C230 270, 232 290, 226 312
-                 C220 334, 210 354, 202 376
-                 C196 392, 192 408, 186 418
-                 C182 410, 175 392, 168 376
-                 C158 354, 150 330, 142 305
-                 C135 285, 126 270, 118 252
-                 C108 232, 94 225, 86 210
-                 C74 190, 80 170, 92 152
-                 C105 135, 120 126, 128 108
-                 C134 94, 142 80, 152 64
-                 C160 50, 168 40, 178 35 Z"
-              fill="url(#topoHills)"
-              stroke="#FFFFFF"
-              strokeWidth="2"
-            />
-
-            {/* Delicate Inner State / Territorial Boundary Paths */}
-            <G stroke="#CBD5E1" strokeOpacity="0.7" strokeWidth="0.6" fill="none">
-              <Path d="M165 78 Q190 92 218 84" />
-              <Path d="M125 140 Q150 162 180 156" />
-              <Path d="M140 210 Q190 205 238 215" />
-              <Path d="M150 255 Q195 262 232 250" />
-              <Path d="M158 310 Q190 325 214 316" />
-              <Path d="M172 360 Q188 375 198 365" />
-              <Path d="M260 148 Q284 160 305 152" />
-            </G>
-
-            {/* Ambient Regional Labels */}
-            <SvgText x="145" y="172" fill="#707881" fontSize="7" fontWeight="600" opacity="0.6" letterSpacing={1}>
-              RAJASTHAN
-            </SvgText>
-            <SvgText x="175" y="235" fill="#707881" fontSize="7" fontWeight="600" opacity="0.6" letterSpacing={1}>
-              MADHYA PRADESH
-            </SvgText>
-            <SvgText x="156" y="288" fill="#707881" fontSize="7" fontWeight="600" opacity="0.6" letterSpacing={1}>
-              MAHARASHTRA
-            </SvgText>
-            <SvgText x="165" y="348" fill="#707881" fontSize="7" fontWeight="600" opacity="0.6" letterSpacing={1}>
-              KARNATAKA
-            </SvgText>
-            <SvgText x="210" y="275" fill="#707881" fontSize="7" fontWeight="600" opacity="0.6" letterSpacing={1}>
-              ODISHA
-            </SvgText>
-          </Svg>
-
-          {/* Dynamic Station Pins Layer */}
-          {filteredStations.map((st) => {
-            const isSelected = selectedStation?.id === st.id;
-            const nodeColor = getNodeColor(st.status);
-            const badgeText = getLayerBadgeContent(st);
-
-            return (
-              <TouchableOpacity
-                key={st.id}
-                style={[
-                  styles.stationPin,
-                  { top: `${st.topPct}%`, left: `${st.leftPct}%` },
-                  isSelected && styles.selectedPinZIndex,
-                ]}
-                onPress={() => setSelectedStation(st)}
-                activeOpacity={0.8}
-              >
-                {/* Glow rings for alerts/selected */}
-                {(st.status === 'service' || isSelected) && (
-                  <View
-                    style={[
-                      styles.haloRing,
-                      {
-                        backgroundColor:
-                          st.status === 'service' ? 'rgba(186, 26, 26, 0.22)' : 'rgba(0, 97, 148, 0.22)',
-                      },
-                    ]}
-                  />
-                )}
-
-                <View style={[styles.nodeDisc, isSelected && styles.selectedNodeDisc]}>
-                  <View style={[styles.innerDot, { backgroundColor: nodeColor }]} />
-                </View>
-
-                {/* Layer or Station Label */}
-                {(isSelected || activeLayer !== 'health' || st.id === 'AWS_DEL' || st.id === 'AWS_PNQ' || st.status === 'nodata') && (
-                  <View style={styles.pinLabel}>
-                    <Text
-                      style={[
-                        styles.pinLabelText,
-                        st.status === 'service' && { color: Colors.serviceNow },
-                        st.status === 'nodata' && { color: Colors.outline },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {badgeText}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-
-          {/* Floating Map Utilities (Top Right) */}
-          <View style={styles.floatingControls}>
-            <TouchableOpacity
-              style={styles.mapToolBtn}
-              onPress={() => setSelectedStation(displayStations[3] || DEFAULT_STATIONS[3])}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons name="crosshairs-gps" size={18} color={Colors.primary} />
-            </TouchableOpacity>
-
-            <View style={styles.zoomPill}>
-              <TouchableOpacity style={styles.zoomBtn} activeOpacity={0.8}>
-                <MaterialCommunityIcons name="plus" size={18} color={Colors.onSurface} />
-              </TouchableOpacity>
-              <View style={styles.zoomDivider} />
-              <TouchableOpacity style={styles.zoomBtn} activeOpacity={0.8}>
-                <MaterialCommunityIcons name="minus" size={18} color={Colors.onSurface} />
-              </TouchableOpacity>
-            </View>
+          {/* Legend overlay */}
+          <View style={styles.legendOverlay}>
+            {[
+              { color: '#10B981', label: 'Healthy' },
+              { color: '#F59E0B', label: 'Monitor' },
+              { color: '#DC2626', label: 'Service' },
+              { color: '#94A3B8', label: 'No Data' },
+            ].map((item) => (
+              <View key={item.label} style={styles.legendRow}>
+                <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                <Text style={styles.legendText}>{item.label}</Text>
+              </View>
+            ))}
           </View>
         </View>
 
-        {/* Selected Station Drawer Preview */}
+        {/* Selected Station Drawer */}
         {selectedStation && (
           <View style={styles.drawerCard}>
             <View style={styles.drawerHeader}>
@@ -514,9 +620,9 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
                   <View
                     style={[
                       styles.drawerStatusBadge,
-                      selectedStation.status === 'service' && { backgroundColor: 'rgba(186, 26, 26, 0.12)' },
-                      selectedStation.status === 'monitor' && { backgroundColor: 'rgba(245, 158, 11, 0.15)' },
-                      selectedStation.status === 'healthy' && { backgroundColor: 'rgba(16, 185, 129, 0.12)' },
+                      selectedStation.status === 'service' && { backgroundColor: 'rgba(220,38,38,0.12)' },
+                      selectedStation.status === 'monitor' && { backgroundColor: 'rgba(245,158,11,0.15)' },
+                      selectedStation.status === 'healthy' && { backgroundColor: 'rgba(16,185,129,0.12)' },
                       selectedStation.status === 'nodata' && { backgroundColor: Colors.surfaceContainerHighest },
                     ]}
                   >
@@ -540,10 +646,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
 
               <View style={styles.drawerHealthCol}>
                 <Text
-                  style={[
-                    styles.drawerHealthVal,
-                    { color: getNodeColor(selectedStation.status) },
-                  ]}
+                  style={[styles.drawerHealthVal, { color: getNodeColor(selectedStation.status) }]}
                 >
                   {selectedStation.healthScore > 0 ? `${selectedStation.healthScore.toFixed(1)}%` : '--'}
                 </Text>
@@ -551,7 +654,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
               </View>
             </View>
 
-            {/* Tri-stat row */}
             <View style={styles.statsRow}>
               <View style={styles.statBox}>
                 <Text style={styles.statVal}>{selectedStation.temp}</Text>
@@ -569,7 +671,6 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
               </View>
             </View>
 
-            {/* Audit CTA button */}
             <TouchableOpacity
               style={styles.drawerCtaBtn}
               onPress={() => navigation.navigate('StationDetail', { stationId: selectedStation.id })}
@@ -588,318 +689,117 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    paddingHorizontal: Spacing.md,
-    paddingTop: Spacing.sm,
-  },
-  topSection: {
-    marginBottom: Spacing.sm,
-  },
+  screen: { flex: 1, backgroundColor: Colors.background },
+  content: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
+  topSection: { marginBottom: Spacing.sm },
   titleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: Spacing.sm,
   },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: Colors.onSurface,
-    letterSpacing: -0.3,
-  },
-  subTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 2,
-  },
+  sectionTitle: { fontSize: 22, fontWeight: '800', color: Colors.onSurface, letterSpacing: -0.3 },
+  subTitleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   bluePulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.primary,
-    marginRight: 6,
+    width: 6, height: 6, borderRadius: 3,
+    backgroundColor: Colors.primary, marginRight: 6,
   },
-  stationCountText: {
-    fontSize: 12,
-    color: Colors.onSurfaceVariant,
-    fontWeight: '500',
-  },
-  actionBtnsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
+  stationCountText: { fontSize: 12, color: Colors.onSurfaceVariant, fontWeight: '500' },
+  actionBtnsRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   circleIconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 36, height: 36, borderRadius: 18,
     backgroundColor: Colors.surfaceContainer,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
-  activeCircleBtn: {
-    backgroundColor: 'rgba(204, 229, 255, 0.6)',
-  },
+  activeCircleBtn: { backgroundColor: 'rgba(204,229,255,0.6)' },
   searchBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#FFFFFF',
     borderRadius: Spacing.radiusLg,
-    paddingHorizontal: 12,
-    height: 40,
+    paddingHorizontal: 12, height: 40,
     marginBottom: Spacing.sm,
-    borderWidth: 1,
-    borderColor: 'rgba(218, 226, 253, 0.8)',
-    gap: 6,
+    borderWidth: 1, borderColor: 'rgba(218,226,253,0.8)', gap: 6,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 12.5,
-    color: Colors.onSurface,
-  },
+  searchInput: { flex: 1, fontSize: 12.5, color: Colors.onSurface },
   segmentedControl: {
     flexDirection: 'row',
     backgroundColor: Colors.surfaceContainerHigh,
-    borderRadius: Spacing.radiusFull,
-    padding: 3,
+    borderRadius: Spacing.radiusFull, padding: 3,
   },
   layerPill: {
-    flex: 1,
-    paddingVertical: 7,
-    alignItems: 'center',
-    borderRadius: Spacing.radiusFull,
+    flex: 1, paddingVertical: 7,
+    alignItems: 'center', borderRadius: Spacing.radiusFull,
   },
   activeLayerPill: {
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.1, shadowRadius: 4, elevation: 2,
   },
   layerPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.onSurfaceVariant,
-    letterSpacing: 0.5,
+    fontSize: 9, fontWeight: '700',
+    color: Colors.onSurfaceVariant, letterSpacing: 0.5,
   },
-  activeLayerPillText: {
-    color: Colors.primary,
-  },
+  activeLayerPillText: { color: Colors.primary },
   mapCanvas: {
-    position: 'relative',
     height: 440,
     borderRadius: Spacing.radius2xl,
     overflow: 'hidden',
-    backgroundColor: Colors.surfaceContainerLow,
     borderWidth: 1,
-    borderColor: 'rgba(218, 226, 253, 0.8)',
+    borderColor: 'rgba(218,226,253,0.8)',
     shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 4,
+    shadowOpacity: 0.5, shadowRadius: 24, elevation: 4,
     marginVertical: Spacing.xs,
   },
-  stationPin: {
+  webView: { flex: 1 },
+  legendOverlay: {
     position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transform: [{ translateX: -10 }, { translateY: -10 }],
-    zIndex: 10,
-  },
-  selectedPinZIndex: {
-    zIndex: 30,
-  },
-  haloRing: {
-    position: 'absolute',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
-  nodeDisc: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
+    bottom: 12, left: 12,
+    backgroundColor: 'rgba(255,255,255,0.92)',
+    borderRadius: 10,
+    padding: 8, gap: 4,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
   },
-  selectedNodeDisc: {
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-  },
-  innerDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  pinLabel: {
-    position: 'absolute',
-    top: -18,
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  pinLabelText: {
-    fontSize: 8.5,
-    fontWeight: '800',
-    color: Colors.onSurface,
-  },
-  floatingControls: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    gap: 8,
-    zIndex: 25,
-  },
-  mapToolBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  zoomPill: {
-    borderRadius: 14,
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  zoomBtn: {
-    width: 36,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  zoomDivider: {
-    height: 1,
-    backgroundColor: 'rgba(218, 226, 253, 0.8)',
-  },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 10, color: '#475569', fontWeight: '600' },
   drawerCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: Spacing.radius2xl,
-    padding: Spacing.md,
-    marginTop: Spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(218, 226, 253, 0.8)',
+    borderRadius: Spacing.radius2xl, padding: Spacing.md,
+    marginTop: Spacing.md, borderWidth: 1,
+    borderColor: 'rgba(218,226,253,0.8)',
     shadowColor: Colors.shadow,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 3,
+    shadowOpacity: 0.4, shadowRadius: 16, elevation: 3,
   },
-  drawerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  drawerTitleCol: {
-    flex: 1,
-    marginRight: 10,
-  },
-  drawerCodeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  drawerCodeText: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.onSurface,
-  },
-  drawerStatusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Spacing.radiusFull,
-  },
-  drawerStatusBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  drawerLocationText: {
-    fontSize: 12,
-    color: Colors.onSurfaceVariant,
-    marginTop: 2,
-  },
-  drawerHealthCol: {
-    alignItems: 'flex-end',
-  },
-  drawerHealthVal: {
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  drawerHealthLbl: {
-    fontSize: 10,
-    color: Colors.onSurfaceVariant,
-  },
+  drawerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  drawerTitleCol: { flex: 1, marginRight: 10 },
+  drawerCodeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  drawerCodeText: { fontSize: 16, fontWeight: '800', color: Colors.onSurface },
+  drawerStatusBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: Spacing.radiusFull },
+  drawerStatusBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.3 },
+  drawerLocationText: { fontSize: 12, color: Colors.onSurfaceVariant, marginTop: 2 },
+  drawerHealthCol: { alignItems: 'flex-end' },
+  drawerHealthVal: { fontSize: 18, fontWeight: '800' },
+  drawerHealthLbl: { fontSize: 10, color: Colors.onSurfaceVariant },
   statsRow: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(242, 243, 255, 0.7)',
+    backgroundColor: 'rgba(242,243,255,0.7)',
     borderRadius: Spacing.radiusMd,
-    padding: Spacing.sm,
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    marginVertical: Spacing.md,
+    padding: Spacing.sm, justifyContent: 'space-around',
+    alignItems: 'center', marginVertical: Spacing.md,
   },
-  statBox: {
-    alignItems: 'center',
-  },
-  statVal: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: Colors.onSurface,
-  },
-  statLbl: {
-    fontSize: 10,
-    color: Colors.onSurfaceVariant,
-    marginTop: 1,
-  },
-  statDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(218, 226, 253, 0.8)',
-  },
+  statBox: { alignItems: 'center' },
+  statVal: { fontSize: 15, fontWeight: '800', color: Colors.onSurface },
+  statLbl: { fontSize: 10, color: Colors.onSurfaceVariant, marginTop: 1 },
+  statDivider: { width: 1, height: 24, backgroundColor: 'rgba(218,226,253,0.8)' },
   drawerCtaBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: Colors.primary,
-    borderRadius: Spacing.radiusMd,
-    paddingVertical: 11,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, backgroundColor: Colors.primary,
+    borderRadius: Spacing.radiusMd, paddingVertical: 11,
   },
-  drawerCtaBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
+  drawerCtaBtnText: { fontSize: 13, fontWeight: '700', color: '#FFFFFF' },
 });

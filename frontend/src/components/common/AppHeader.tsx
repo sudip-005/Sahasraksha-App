@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing } from '../../theme';
 
 interface AppHeaderProps {
@@ -20,8 +21,10 @@ export const AppHeader: React.FC<AppHeaderProps> = ({
   rightAction,
   liveBadgeText = 'LIVE · INSAT-3DR',
 }) => {
+  const insets = useSafeAreaInsets();
+  
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top, height: 64 + insets.top }]}>
       <View style={styles.leftRow}>
         {showBack ? (
           <TouchableOpacity
