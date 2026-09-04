@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sahasraksha
+      POSTGRES_PASSWORD: sahasraksha
+      POSTGRES_DB: sahasraksha
+    ports:
+      - "5432:5432"
+    volumes:
+      - sahasraksha_pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env.example
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+
+volumes:
+  sahasraksha_pgdata:

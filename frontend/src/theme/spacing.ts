@@ -1,0 +1,16 @@
+export const Spacing = {
+  xxs: 2,
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+  xxl: 48,
+  radiusXs: 4,
+  radiusSm: 8,
+  radiusMd: 12,
+  radiusLg: 16,
+  radiusXl: 24,
+  radius2xl: 32,
+  radiusFull: 9999,
+};
