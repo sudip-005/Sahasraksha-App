@@ -508,6 +508,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: Colors.onSurfaceVariant,
+    textAlign: 'center',
   },
   activeSegmentBtnText: {
     color: Colors.primary,

@@ -728,7 +728,7 @@ const styles = StyleSheet.create({
   },
   layerPill: {
     flex: 1, paddingVertical: 7,
-    alignItems: 'center', borderRadius: Spacing.radiusFull,
+    alignItems: 'center', justifyContent: 'center', borderRadius: Spacing.radiusFull,
   },
   activeLayerPill: {
     backgroundColor: '#FFFFFF',
@@ -739,6 +739,7 @@ const styles = StyleSheet.create({
   layerPillText: {
     fontSize: 9, fontWeight: '700',
     color: Colors.onSurfaceVariant, letterSpacing: 0.5,
+    textAlign: 'center',
   },
   activeLayerPillText: { color: Colors.primary },
   mapCanvas: {
