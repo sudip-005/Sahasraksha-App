@@ -32,149 +32,6 @@ interface MapStationNode {
   condition?: string | null;
 }
 
-const DEFAULT_STATIONS: MapStationNode[] = [
-  {
-    id: 'AWS_DEL',
-    code: 'AWS_DEL',
-    name: 'New Delhi Regional Station',
-    city: 'New Delhi (Northern Regional Met Centre)',
-    status: 'service',
-    statusLabel: 'Critical Barometric Shift',
-    temp: '31.2°C',
-    pressure: '998.2 hPa',
-    humidity: '34%',
-    healthScore: 42.1,
-    latitude: 28.61,
-    longitude: 77.20,
-  },
-  {
-    id: 'AWS_JAI',
-    code: 'AWS_JAI',
-    name: 'Jaipur Met Station',
-    city: 'Jaipur, Rajasthan',
-    status: 'healthy',
-    statusLabel: 'Optimal',
-    temp: '29.1°C',
-    pressure: '1010.5 hPa',
-    humidity: '42%',
-    healthScore: 96.5,
-    latitude: 26.92,
-    longitude: 75.82,
-  },
-  {
-    id: 'AWS_LKO',
-    code: 'AWS_LKO',
-    name: 'Lucknow Central',
-    city: 'Lucknow, Uttar Pradesh',
-    status: 'healthy',
-    statusLabel: 'Optimal',
-    temp: '28.0°C',
-    pressure: '1011.8 hPa',
-    humidity: '58%',
-    healthScore: 97.2,
-    latitude: 26.85,
-    longitude: 80.95,
-  },
-  {
-    id: 'AWS_PNQ',
-    code: 'AWS_PNQ',
-    name: 'Pune Western Met Centre',
-    city: 'Pune, Maharashtra (Western Met Centre)',
-    status: 'monitor',
-    statusLabel: 'Monitor: Barometer Drift',
-    temp: '27.4°C',
-    pressure: '1008.4 hPa',
-    humidity: '68%',
-    healthScore: 91.2,
-    latitude: 18.52,
-    longitude: 73.86,
-  },
-  {
-    id: 'AWS_BOM',
-    code: 'AWS_BOM',
-    name: 'Colaba Mumbai AWS',
-    city: 'Colaba Mumbai, Maharashtra',
-    status: 'healthy',
-    statusLabel: 'Optimal',
-    temp: '29.8°C',
-    pressure: '1012.0 hPa',
-    humidity: '79%',
-    healthScore: 98.4,
-    latitude: 18.90,
-    longitude: 72.82,
-  },
-  {
-    id: 'AWS_HYD',
-    code: 'AWS_HYD',
-    name: 'Hyderabad Basin',
-    city: 'Hyderabad, Telangana',
-    status: 'service',
-    statusLabel: 'Solar Sensor Degradation',
-    temp: '30.4°C',
-    pressure: '1006.1 hPa',
-    humidity: '52%',
-    healthScore: 61.0,
-    latitude: 17.38,
-    longitude: 78.49,
-  },
-  {
-    id: 'AWS_BLR',
-    code: 'AWS_BLR',
-    name: 'Bengaluru Met Observatory',
-    city: 'Bengaluru, Karnataka',
-    status: 'healthy',
-    statusLabel: 'Optimal',
-    temp: '24.6°C',
-    pressure: '1014.2 hPa',
-    humidity: '62%',
-    healthScore: 99.1,
-    latitude: 12.97,
-    longitude: 77.59,
-  },
-  {
-    id: 'AWS_CHN',
-    code: 'AWS_CHN',
-    name: 'Chennai Coastal Station',
-    city: 'Chennai Coastal, Tamil Nadu',
-    status: 'monitor',
-    statusLabel: 'Monitor: Anemometer Lag',
-    temp: '30.1°C',
-    pressure: '1009.6 hPa',
-    humidity: '82%',
-    healthScore: 88.0,
-    latitude: 13.08,
-    longitude: 80.27,
-  },
-  {
-    id: 'AWS_CCU',
-    code: 'AWS_CCU',
-    name: 'Alipore Kolkata AWS',
-    city: 'Alipore Kolkata, West Bengal',
-    status: 'healthy',
-    statusLabel: 'Optimal',
-    temp: '28.7°C',
-    pressure: '1010.9 hPa',
-    humidity: '74%',
-    healthScore: 95.8,
-    latitude: 22.57,
-    longitude: 88.36,
-  },
-  {
-    id: 'AWS_GUW',
-    code: 'AWS_GUW',
-    name: 'Guwahati Northeast Station',
-    city: 'Guwahati, Assam',
-    status: 'nodata',
-    statusLabel: 'Offline / No Signal',
-    temp: '--°C',
-    pressure: '-- hPa',
-    humidity: '--%',
-    healthScore: 0.0,
-    latitude: 26.14,
-    longitude: 91.74,
-  },
-];
-
 function buildLeafletHTML(stations: MapStationNode[], activeLayer: string): string {
   const stationsJson = JSON.stringify(
     stations.map((s) => ({
@@ -425,7 +282,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
   const [activeLayer, setActiveLayer] = useState<'health' | 'temp' | 'pressure' | 'reporting'>('health');
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
-  const [selectedStation, setSelectedStation] = useState<MapStationNode>(DEFAULT_STATIONS[3]);
+  const [selectedStation, setSelectedStation] = useState<MapStationNode | null>(null);
   const webViewRef = useRef<any>(null);
 
   const displayStations = useMemo((): MapStationNode[] => {
@@ -462,7 +319,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         };
       });
     }
-    return DEFAULT_STATIONS;
+    return [];
   }, [mapPoints]);
 
   const filteredStations = useMemo(() => {
@@ -518,7 +375,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
               <View style={styles.subTitleRow}>
                 <View style={styles.bluePulseDot} />
                 <Text style={styles.stationCountText}>
-                  {total > 0 ? `${total.toLocaleString()} Stations Monitored` : '2,595 Stations Monitored'}
+                  {total > 0 ? `${total.toLocaleString()} Stations Monitored` : '0 Stations Monitored'}
                 </Text>
                 {loading && <ActivityIndicator size="small" color={Colors.primary} style={{ marginLeft: 6 }} />}
               </View>

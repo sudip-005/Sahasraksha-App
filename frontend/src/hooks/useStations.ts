@@ -22,7 +22,7 @@ export function useStations(initialStatus: string = 'ALL') {
         search: search || undefined,
         status: status !== 'ALL' ? status : undefined,
         page,
-        limit: 20,
+        limit: 100,
         sort_by: sortBy,
         order,
       });

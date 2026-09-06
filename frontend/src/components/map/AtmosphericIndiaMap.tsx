@@ -16,21 +16,7 @@ export interface AtmosphericIndiaMapProps {
   showLayerControl?: boolean;
 }
 
-// Built-in fallback points if backend hasn't loaded yet
-export const DEFAULT_FALLBACK_POINTS: StationMapPoint[] = [
-  { id: 'AWS_DEL_01', name: 'Safdarjung Delhi', code: 'VIDD', latitude: 28.58, longitude: 77.21, status: 'HEALTHY', health_score: 98.5, current_temp: 30.2, current_pressure: 988.8 },
-  { id: 'AWS_JAI_01', name: 'Jaisalmer Desert Post', code: 'VIJR', latitude: 26.92, longitude: 70.91, status: 'MONITOR', health_score: 76.0, current_temp: 33.8, current_pressure: 987.7 },
-  { id: 'AWS_PUN_01', name: 'Shivajinagar Pune', code: 'VAPO', latitude: 18.53, longitude: 73.85, status: 'HEALTHY', health_score: 96.5, current_temp: 28.0, current_pressure: 949.3 },
-  { id: 'AWS_MUM_01', name: 'Colaba Mumbai', code: 'VABB', latitude: 18.90, longitude: 72.81, status: 'HEALTHY', health_score: 96.0, current_temp: 31.6, current_pressure: 1013.0 },
-  { id: 'AWS_CHE_02', name: 'Sohra High-Precip', code: 'VEBI', latitude: 25.28, longitude: 91.73, status: 'SERVICE_NOW', health_score: 48.0, current_temp: 22.5, current_pressure: 855.2 },
-  { id: 'AWS_BLR_01', name: 'HAL Bengaluru', code: 'VOBG', latitude: 12.95, longitude: 77.67, status: 'HEALTHY', health_score: 99.0, current_temp: 25.9, current_pressure: 913.1 },
-  { id: 'AWS_CHE_01', name: 'Chennai Meenambakkam', code: 'VOMM', latitude: 12.98, longitude: 80.18, status: 'HEALTHY', health_score: 97.0, current_temp: 31.4, current_pressure: 1012.6 },
-  { id: 'AWS_KOL_01', name: 'Alipore Kolkata', code: 'VECC', latitude: 22.53, longitude: 88.33, status: 'HEALTHY', health_score: 95.0, current_temp: 31.5, current_pressure: 1013.6 },
-  { id: 'AWS_LEH_01', name: 'Leh High-Altitude', code: 'VILH', latitude: 34.15, longitude: 77.58, status: 'MONITOR', health_score: 72.0, current_temp: 12.9, current_pressure: 668.2 },
-  { id: 'AWS_SHM_01', name: 'Shimla Ridge', code: 'VISM', latitude: 31.10, longitude: 77.17, status: 'HEALTHY', health_score: 94.0, current_temp: 17.2, current_pressure: 781.1 },
-  { id: 'AWS_NAG_01', name: 'Nagpur Central Hub', code: 'VANP', latitude: 21.09, longitude: 79.05, status: 'HEALTHY', health_score: 97.2, current_temp: 29.8, current_pressure: 977.8 },
-  { id: 'AWS_BHO_01', name: 'Bhopal Bairagarh', code: 'VABP', latitude: 23.29, longitude: 77.35, status: 'NO_DATA', health_score: 0.0, current_temp: undefined, current_pressure: undefined },
-];
+export const DEFAULT_FALLBACK_POINTS: StationMapPoint[] = [];
 
 function mapStatus(status: StationMapPoint['status']): 'ok' | 'monitor' | 'schedule' | 'service' | 'nodata' {
   if (status === 'SERVICE_NOW' || status === 'SERVICE NOW') return 'service';

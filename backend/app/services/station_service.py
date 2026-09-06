@@ -1,5 +1,3 @@
-import csv
-from pathlib import Path
 from typing import List, Optional, Dict, Any, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
@@ -14,43 +12,6 @@ from .detection_service import DetectionService
 from .heartbeat_service import HeartbeatService
 
 class StationService:
-    @staticmethod
-    def _load_ml_map_points() -> List[StationMapPoint]:
-        csv_path = Path(__file__).resolve().parents[3] / "ml" / "data" / "skyguard_station_coords.csv"
-        if not csv_path.exists():
-            return []
-
-        points = []
-        with csv_path.open(newline="", encoding="utf-8") as csv_file:
-            for row in csv.DictReader(csv_file):
-                pressure_pct = float(row["P_pct"])
-                data_quality = row["data_quality"]
-                if data_quality != "good":
-                    status = "NO_DATA"
-                    condition = "Low-confidence data"
-                elif pressure_pct < 70:
-                    status = "SERVICE_NOW"
-                    condition = "Critical data availability"
-                elif pressure_pct < 90:
-                    status = "MONITOR"
-                    condition = "Reduced data availability"
-                else:
-                    status = "HEALTHY"
-                    condition = "Healthy data coverage"
-
-                points.append(StationMapPoint(
-                    id=row["station_id"],
-                    name=row["name"],
-                    code=row["station_id"],
-                    latitude=float(row["lat"]),
-                    longitude=float(row["lon"]),
-                    status=status,
-                    health_score=pressure_pct,
-                    data_quality=data_quality,
-                    condition=condition,
-                ))
-        return points
-
     @staticmethod
     def get_stations(
         db: Session,
@@ -133,7 +94,10 @@ class StationService:
 
     @staticmethod
     def get_map_points(db: Session) -> List[StationMapPoint]:
-        stations = db.query(Station).all()
+        stations = [
+            station for station in db.query(Station).all()
+            if (station.sensors_config or {}).get("source") == "skyguard_station_coords.csv"
+        ]
         points = []
         for st in stations:
             latest_r = db.query(Reading).filter(
@@ -149,9 +113,20 @@ class StationService:
                 status=st.status,
                 health_score=st.health_score,
                 current_temp=latest_r.temperature if latest_r else None,
-                current_pressure=latest_r.pressure if latest_r else None
+                current_pressure=latest_r.pressure if latest_r else None,
+                data_quality=(st.sensors_config or {}).get("data_quality"),
+                condition=StationService._station_condition(st.status)
             ))
-        return points + StationService._load_ml_map_points()
+        return points
+
+    @staticmethod
+    def _station_condition(status: str) -> str:
+        return {
+            "NO_DATA": "Low-confidence data",
+            "SERVICE_NOW": "Critical data availability",
+            "MONITOR": "Reduced data availability",
+            "HEALTHY": "Healthy data coverage",
+        }.get(status, "Unknown data condition")
 
     @staticmethod
     def get_station_detail(db: Session, station_id: str) -> Optional[StationDetail]:

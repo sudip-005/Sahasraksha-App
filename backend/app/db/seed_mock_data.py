@@ -1,6 +1,8 @@
 import math
 import random
+import csv
 from datetime import datetime, timedelta
+from pathlib import Path
 from sqlalchemy.orm import Session
 from ..db.database import SessionLocal, init_db
 from ..models import Station, Reading, Alert, WorkOrder, DetectionRecord
@@ -153,6 +155,71 @@ IMD_STATIONS = [
     }
 ]
 
+
+def _load_skyguard_stations():
+    csv_path = Path(__file__).resolve().parents[3] / "ml" / "data" / "skyguard_station_coords.csv"
+    if not csv_path.exists():
+        return []
+
+    stations = []
+    with csv_path.open(newline="", encoding="utf-8") as csv_file:
+        for row in csv.DictReader(csv_file):
+            health_score = float(row["P_pct"])
+            data_quality = row["data_quality"]
+            if data_quality != "good":
+                status = "NO_DATA"
+            elif health_score < 70:
+                status = "SERVICE_NOW"
+            elif health_score < 90:
+                status = "MONITOR"
+            else:
+                status = "HEALTHY"
+
+            stations.append({
+                "id": row["station_id"],
+                "name": row["name"],
+                "code": row["station_id"],
+                "state": "India",
+                "district": row["name"],
+                "latitude": float(row["lat"]),
+                "longitude": float(row["lon"]),
+                "elevation_m": 0.0,
+                "status": status,
+                "health_score": health_score,
+                "data_quality": data_quality,
+            })
+    return stations
+
+
+def _add_skyguard_stations(db: Session, now: datetime):
+    stations = _load_skyguard_stations()
+    added = 0
+    for station_info in stations:
+        if db.query(Station).filter(Station.id == station_info["id"]).first():
+            continue
+
+        db.add(Station(
+            id=station_info["id"],
+            name=station_info["name"],
+            code=station_info["code"],
+            state=station_info["state"],
+            district=station_info["district"],
+            latitude=station_info["latitude"],
+            longitude=station_info["longitude"],
+            elevation_m=station_info["elevation_m"],
+            status=station_info["status"],
+            health_score=station_info["health_score"],
+            last_seen=now,
+            created_at=now,
+            sensors_config={"source": "skyguard_station_coords.csv", "data_quality": station_info["data_quality"]}
+        ))
+        added += 1
+
+    if added:
+        db.commit()
+    logger.info(f"Integrated {len(stations)} SkyGuard coordinate stations ({added} new).")
+    return stations
+
 def seed_database(db: Session):
     logger.info("Initializing database tables...")
     init_db()
@@ -160,6 +227,7 @@ def seed_database(db: Session):
     existing_count = db.query(Station).count()
     if existing_count > 0:
         logger.info(f"Database already contains {existing_count} stations. Skipping seed.")
+        _add_skyguard_stations(db, datetime.utcnow())
         return
 
     logger.info(f"Seeding {len(IMD_STATIONS)} IMD Automatic Weather Stations...")
@@ -189,6 +257,8 @@ def seed_database(db: Session):
         db.add(st)
 
     db.commit()
+
+    _add_skyguard_stations(db, now)
 
     # Generate 48 hours of time-series readings for active stations
     logger.info("Generating 48-hour continuous time-series sensor readings...")
