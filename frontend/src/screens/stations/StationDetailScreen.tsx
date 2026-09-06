@@ -14,6 +14,15 @@ import { useStationDetail } from '../../hooks/useStationDetail';
 import { AppHeader } from '../../components/common/AppHeader';
 import { Colors, Typography, Spacing } from '../../theme';
 
+function formatEvidence(key: string, value: number): string {
+  if (key.startsWith('spatial_z_')) return `${value.toFixed(1)} standard deviations from every neighbour`;
+  if (key.startsWith('cusum_')) return `drift tally climbing for ${value.toFixed(1)} hours`;
+  if (key === 'tide_loss') return `pressure heartbeat down to ${(value * 100).toFixed(0)}% of normal`;
+  if (key === 'runlen_T') return `identical value for ${value.toFixed(1)} hours`;
+  if (key === 'gate_dewpoint') return 'physically impossible - dewpoint above air temperature';
+  return `${key}: ${value}`;
+}
+
 interface StationDetailScreenProps {
   route: any;
   navigation: any;
@@ -24,7 +33,7 @@ export const StationDetailScreen: React.FC<StationDetailScreenProps> = ({
   navigation,
 }) => {
   const { stationId = 'AWS_DEL_01' } = route.params || {};
-  const { station, readings, diagnosis, loading, error, refetch } = useStationDetail(stationId);
+  const { station, readings, diagnosis, timeseries, mlAlerts, loading, error, refetch } = useStationDetail(stationId);
 
   // Dynamic values bound directly to backend data with robust fallbacks
   const stationCode = station?.code || station?.id || stationId;
@@ -38,8 +47,10 @@ export const StationDetailScreen: React.FC<StationDetailScreenProps> = ({
   const status = station?.status ?? (stationId === 'AWS_CHE_02' ? 'SERVICE_NOW' : 'HEALTHY');
 
   const statusLabel =
-    status === 'SERVICE_NOW'
+    (status === 'SERVICE_NOW' || status === 'SERVICE NOW')
       ? 'SERVICE NOW'
+      : status === 'SCHEDULE'
+      ? 'SCHEDULE'
       : status === 'MONITOR'
       ? 'MONITOR'
       : status === 'NO_DATA'
@@ -47,8 +58,10 @@ export const StationDetailScreen: React.FC<StationDetailScreenProps> = ({
       : 'HEALTHY OPTIMAL';
 
   const statusColor =
-    status === 'SERVICE_NOW'
+    status === 'SERVICE_NOW' || status === 'SERVICE NOW'
       ? Colors.serviceNow
+      : status === 'SCHEDULE'
+      ? '#0284C7'
       : status === 'MONITOR'
       ? '#D97706'
       : status === 'NO_DATA'
@@ -56,8 +69,10 @@ export const StationDetailScreen: React.FC<StationDetailScreenProps> = ({
       : Colors.healthy;
 
   const statusBg =
-    status === 'SERVICE_NOW'
+    status === 'SERVICE_NOW' || status === 'SERVICE NOW'
       ? 'rgba(186, 26, 26, 0.12)'
+      : status === 'SCHEDULE'
+      ? 'rgba(56, 189, 248, 0.14)'
       : status === 'MONITOR'
       ? 'rgba(245, 158, 11, 0.15)'
       : status === 'NO_DATA'
@@ -78,6 +93,7 @@ export const StationDetailScreen: React.FC<StationDetailScreenProps> = ({
 
   // Sensor list from backend
   const sensorsList = station?.sensors && station.sensors.length > 0 ? station.sensors : null;
+  const latestMlAlert = mlAlerts.find((alert) => alert.flag === 1);
 
   return (
     <View style={styles.screen}>
@@ -306,6 +322,53 @@ export const StationDetailScreen: React.FC<StationDetailScreenProps> = ({
               <Text style={styles.boldText}>{agreementPct.toFixed(1)}%</Text> — verified across regional Haversine-weighted cluster nodes.
             </Text>
           </View>
+        </View>
+
+        <View style={styles.cardSection}>
+          <View style={styles.sectionTitleRow}>
+            <View>
+              <Text style={styles.sectionTitle}>ML Prediction & Evidence</Text>
+              <Text style={styles.sectionSubtitle}>Calibrated SkyGuard verdicts from the live pipeline</Text>
+            </View>
+            <View style={styles.liveMetricPill}>
+              <Text style={styles.liveMetricPillText}>{latestMlAlert ? 'FLAGGED' : 'NO FLAG'}</Text>
+            </View>
+          </View>
+
+          <View style={styles.mlDetailGrid}>
+            <View>
+              <Text style={styles.mlDetailLabel}>DEGRADATION</Text>
+              <Text style={styles.mlDetailValue}>
+                {station?.degradation === null || station?.degradation === undefined ? '—' : `${(station.degradation * 100).toFixed(1)}%`}
+              </Text>
+            </View>
+            <View>
+              <Text style={styles.mlDetailLabel}>DAYS TO THRESHOLD</Text>
+              <Text style={styles.mlDetailValue}>{station?.days_to_threshold ?? '—'}</Text>
+            </View>
+            <View>
+              <Text style={styles.mlDetailLabel}>TIDE HEARTBEAT</Text>
+              <Text style={styles.mlDetailValue}>
+                {timeseries.length > 0 && timeseries[timeseries.length - 1].amp_ratio_P !== null
+                  ? `${(timeseries[timeseries.length - 1].amp_ratio_P! * 100).toFixed(0)}%`
+                  : '—'}
+              </Text>
+            </View>
+          </View>
+
+          {latestMlAlert && (
+            <View style={styles.evidenceList}>
+              <Text style={styles.evidenceHeading}>
+                {latestMlAlert.reason === 'unclassified' ? 'unclassified' : latestMlAlert.reason} · Confidence {(latestMlAlert.confidence * 100).toFixed(0)}% (calibrated)
+              </Text>
+              {latestMlAlert.evidence.map(([key, value], index) => (
+                <View key={`${key}-${index}`} style={styles.evidenceRow}>
+                  <View style={styles.evidenceBullet} />
+                  <Text style={styles.evidenceText}>{formatEvidence(key, value)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Sensor Health Breakdown (Live Backend Data) */}
@@ -842,6 +905,53 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.primary,
     letterSpacing: 0.5,
+  },
+  mlDetailGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFF',
+    borderRadius: Spacing.radiusLg,
+    padding: 10,
+    marginBottom: Spacing.sm,
+  },
+  mlDetailLabel: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: Colors.onSurfaceVariant,
+    letterSpacing: 0.4,
+  },
+  mlDetailValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.onSurface,
+    marginTop: 3,
+  },
+  evidenceList: {
+    gap: 7,
+  },
+  evidenceHeading: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.serviceNow,
+    textTransform: 'uppercase',
+  },
+  evidenceRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  evidenceBullet: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: Colors.serviceNow,
+    marginTop: 6,
+  },
+  evidenceText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.onSurfaceVariant,
+    lineHeight: 17,
   },
   modesList: {
     gap: 8,

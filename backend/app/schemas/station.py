@@ -34,6 +34,8 @@ class StationMapPoint(BaseModel):
     health_score: float
     current_temp: Optional[float] = None
     current_pressure: Optional[float] = None
+    data_quality: Optional[str] = None
+    condition: Optional[str] = None
 
 class StationHealthSummary(StationBase):
     id: str

@@ -32,6 +32,14 @@ export const DEFAULT_FALLBACK_POINTS: StationMapPoint[] = [
   { id: 'AWS_BHO_01', name: 'Bhopal Bairagarh', code: 'VABP', latitude: 23.29, longitude: 77.35, status: 'NO_DATA', health_score: 0.0, current_temp: undefined, current_pressure: undefined },
 ];
 
+function mapStatus(status: StationMapPoint['status']): 'ok' | 'monitor' | 'schedule' | 'service' | 'nodata' {
+  if (status === 'SERVICE_NOW' || status === 'SERVICE NOW') return 'service';
+  if (status === 'SCHEDULE') return 'schedule';
+  if (status === 'MONITOR') return 'monitor';
+  if (status === 'NO_DATA') return 'nodata';
+  return 'ok';
+}
+
 function buildLeafletHTML(stations: StationMapPoint[], activeLayer: string, selectedId?: string): string {
   const stationsJson = JSON.stringify(
     stations.map((s) => ({
@@ -39,11 +47,14 @@ function buildLeafletHTML(stations: StationMapPoint[], activeLayer: string, sele
       code: s.code || s.id,
       name: s.name,
       city: s.name,
-      status: s.status === 'SERVICE_NOW' ? 'service' : s.status === 'MONITOR' ? 'monitor' : s.status === 'NO_DATA' ? 'nodata' : 'healthy',
+      status: mapStatus(s.status),
       temp: s.current_temp !== null && s.current_temp !== undefined ? `${s.current_temp.toFixed(1)}°C` : '27.0°C',
       pressure: s.current_pressure !== null && s.current_pressure !== undefined ? `${s.current_pressure.toFixed(1)} hPa` : '1010 hPa',
       humidity: '65%',
       healthScore: s.health_score || 95.0,
+      degradation: s.degradation,
+      trendPerDay: s.trend_per_day,
+      daysToThreshold: s.days_to_threshold,
       lat: s.latitude,
       lng: s.longitude,
     }))
@@ -78,8 +89,9 @@ function buildLeafletHTML(stations: StationMapPoint[], activeLayer: string, sele
       transition: transform 0.15s ease;
     }
     .station-dot:hover { transform: scale(1.3); }
-    .station-dot.healthy  { background: #10B981; }
+    .station-dot.ok       { background: #10B981; }
     .station-dot.monitor  { background: #F59E0B; }
+    .station-dot.schedule { background: #38BDF8; }
     .station-dot.service  { background: #DC2626; box-shadow: 0 0 0 4px rgba(220,38,38,0.25), 0 2px 8px rgba(0,0,0,0.3); }
     .station-dot.nodata   { background: #94A3B8; }
     .station-dot.selected { transform: scale(1.5); border-color: #3B82F6; box-shadow: 0 0 0 5px rgba(59,130,246,0.3), 0 2px 10px rgba(0,0,0,0.4); z-index: 1000 !important; }
@@ -97,6 +109,7 @@ function buildLeafletHTML(stations: StationMapPoint[], activeLayer: string, sele
       letter-spacing: 0.3px;
     }
     .station-label.service { color: #DC2626; }
+    .station-label.schedule { color: #0284C7; }
     .station-label.nodata  { color: #94A3B8; }
   </style>
 </head>
@@ -109,14 +122,20 @@ function buildLeafletHTML(stations: StationMapPoint[], activeLayer: string, sele
 
   var map = L.map('map', {
     center: [22.5, 82.5],
-    zoom: 4.5,
+    zoom: 5,
     zoomControl: false,
     attributionControl: true,
+    minZoom: 3,
+    maxZoom: 18,
   });
 
+  // OpenStreetMap's standard tile service provides the geographic base layer;
+  // station telemetry remains an application-owned overlay.
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    maxZoom: 18,
+    tileSize: 256,
+    updateWhenIdle: true,
   }).addTo(map);
 
   var selectedId = null;
@@ -127,12 +146,15 @@ function buildLeafletHTML(stations: StationMapPoint[], activeLayer: string, sele
     if (activeLayer === 'pressure') return st.pressure.replace(' hPa', '') + ' hPa';
     if (activeLayer === 'reporting') return st.healthScore.toFixed(0) + '%';
     if (st.status === 'nodata') return 'NO DATA';
+    if (st.status === 'service') return 'SERVICE NOW';
+    if (st.status === 'schedule') return 'SCHEDULE';
+    if (st.status === 'monitor') return 'MONITOR';
     return st.code;
   }
 
   function createMarker(st) {
-    var showLabel = activeLayer !== 'health' || st.status === 'nodata' || st.status === 'service';
-    var labelClass = 'station-label ' + (st.status === 'service' || st.status === 'nodata' ? st.status : '');
+    var showLabel = activeLayer !== 'health' || st.status !== 'ok';
+    var labelClass = 'station-label ' + (st.status !== 'ok' ? st.status : '');
 
     var html = '<div class="station-marker">' +
       '<div class="station-dot ' + st.status + '" id="dot-' + st.id + '"></div>' +
@@ -186,6 +208,12 @@ function buildLeafletHTML(stations: StationMapPoint[], activeLayer: string, sele
     m.addTo(map);
     markerMap[st.id] = m;
   });
+
+  // Keep the whole live network visible instead of relying on a fixed India crop.
+  if (stations.length > 1) {
+    var stationBounds = L.latLngBounds(stations.map(function(st) { return [st.lat, st.lng]; }));
+    map.fitBounds(stationBounds, { padding: [24, 24], maxZoom: 6 });
+  }
 
   if (initialSelectedId) {
     setTimeout(function() {

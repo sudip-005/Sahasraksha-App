@@ -158,8 +158,9 @@ export const StationsScreen: React.FC<StationsScreenProps> = ({ navigation }) =>
       return backendStations.map((st: StationHealthSummary) => {
         const isUrgent = st.status === 'SERVICE_NOW';
         let statusBadge = 'Healthy';
-        if (st.status === 'SERVICE_NOW') statusBadge = 'Service Now';
+        if (st.status === 'SERVICE_NOW' || st.status === 'SERVICE NOW') statusBadge = 'Service Now';
         else if (st.status === 'MONITOR') statusBadge = 'Monitor';
+        else if (st.status === 'SCHEDULE') statusBadge = 'Schedule';
         else if (st.status === 'NO_DATA') statusBadge = 'No Data';
 
         // Find primary anomaly from flags or default
@@ -223,10 +224,14 @@ export const StationsScreen: React.FC<StationsScreenProps> = ({ navigation }) =>
   const getStatusBorderColor = (status: StationStatus) => {
     switch (status) {
       case 'SERVICE_NOW':
+      case 'SERVICE NOW':
         return Colors.serviceNow;
+      case 'SCHEDULE':
+        return '#0284C7';
       case 'MONITOR':
         return '#F59E0B';
       case 'HEALTHY':
+      case 'OK':
         return Colors.healthy;
       case 'NO_DATA':
         return Colors.outline;
@@ -236,10 +241,14 @@ export const StationsScreen: React.FC<StationsScreenProps> = ({ navigation }) =>
   const getStatusBadgeStyle = (status: StationStatus) => {
     switch (status) {
       case 'SERVICE_NOW':
+      case 'SERVICE NOW':
         return { bg: 'rgba(186, 26, 26, 0.12)', text: Colors.serviceNow };
+      case 'SCHEDULE':
+        return { bg: 'rgba(56, 189, 248, 0.14)', text: '#0284C7' };
       case 'MONITOR':
         return { bg: 'rgba(245, 158, 11, 0.15)', text: '#B45309' };
       case 'HEALTHY':
+      case 'OK':
         return { bg: 'rgba(16, 185, 129, 0.12)', text: '#059669' };
       case 'NO_DATA':
         return { bg: Colors.surfaceContainerHighest, text: Colors.onSurfaceVariant };
@@ -374,7 +383,7 @@ export const StationsScreen: React.FC<StationsScreenProps> = ({ navigation }) =>
                             { color: getStatusBadgeStyle(currentSelectedPoint.status).text },
                           ]}
                         >
-                          {currentSelectedPoint.status.replace('_', ' ')}
+                          {currentSelectedPoint.status === 'OK' ? 'OK' : currentSelectedPoint.status.replace('_', ' ')}
                         </Text>
                       </View>
                     </View>
@@ -418,6 +427,33 @@ export const StationsScreen: React.FC<StationsScreenProps> = ({ navigation }) =>
                     <MaterialCommunityIcons name="radar" size={15} color={Colors.healthy} />
                     <Text style={styles.telemetryMiniVal}>
                       Lat {currentSelectedPoint.latitude.toFixed(2)}°
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.mlPredictionStrip}>
+                  <View>
+                    <Text style={styles.mlPredictionLabel}>ML DEGRADATION</Text>
+                    <Text style={styles.mlPredictionValue}>
+                      {currentSelectedPoint.degradation !== null && currentSelectedPoint.degradation !== undefined
+                        ? `${(currentSelectedPoint.degradation * 100).toFixed(1)}%`
+                        : '—'}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={styles.mlPredictionLabel}>TREND / DAY</Text>
+                    <Text style={styles.mlPredictionValue}>
+                      {currentSelectedPoint.trend_per_day !== null && currentSelectedPoint.trend_per_day !== undefined
+                        ? currentSelectedPoint.trend_per_day.toFixed(5)
+                        : '—'}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={styles.mlPredictionLabel}>DAYS TO THRESHOLD</Text>
+                    <Text style={styles.mlPredictionValue}>
+                      {currentSelectedPoint.days_to_threshold === null || currentSelectedPoint.days_to_threshold === undefined
+                        ? '—'
+                        : currentSelectedPoint.days_to_threshold}
                     </Text>
                   </View>
                 </View>
@@ -819,6 +855,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: Colors.onSurface,
+  },
+  mlPredictionStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    paddingTop: 9,
+    marginBottom: Spacing.sm,
+  },
+  mlPredictionLabel: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: Colors.onSurfaceVariant,
+    letterSpacing: 0.5,
+  },
+  mlPredictionValue: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.onSurface,
+    marginTop: 2,
   },
   inspectBtn: {
     backgroundColor: Colors.primary,

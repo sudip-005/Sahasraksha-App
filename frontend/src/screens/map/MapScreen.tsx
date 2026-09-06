@@ -20,7 +20,7 @@ interface MapStationNode {
   code: string;
   name: string;
   city: string;
-  status: 'healthy' | 'monitor' | 'service' | 'nodata';
+    status: 'healthy' | 'monitor' | 'schedule' | 'service' | 'nodata';
   statusLabel: string;
   temp: string;
   pressure: string;
@@ -28,6 +28,8 @@ interface MapStationNode {
   healthScore: number;
   latitude: number;
   longitude: number;
+  dataQuality?: string | null;
+  condition?: string | null;
 }
 
 const DEFAULT_STATIONS: MapStationNode[] = [
@@ -185,6 +187,8 @@ function buildLeafletHTML(stations: MapStationNode[], activeLayer: string): stri
       pressure: s.pressure,
       humidity: s.humidity,
       healthScore: s.healthScore,
+      dataQuality: s.dataQuality,
+      condition: s.condition,
       lat: s.latitude,
       lng: s.longitude,
     }))
@@ -221,6 +225,7 @@ function buildLeafletHTML(stations: MapStationNode[], activeLayer: string): stri
     .station-dot:hover { transform: scale(1.3); }
     .station-dot.healthy  { background: #10B981; }
     .station-dot.monitor  { background: #F59E0B; }
+      .station-dot.schedule { background: #38BDF8; }
     .station-dot.service  { background: #DC2626; box-shadow: 0 0 0 4px rgba(220,38,38,0.25), 0 2px 8px rgba(0,0,0,0.3); }
     .station-dot.nodata   { background: #94A3B8; }
     .station-dot.selected { transform: scale(1.5); border-color: #3B82F6; box-shadow: 0 0 0 5px rgba(59,130,246,0.3), 0 2px 10px rgba(0,0,0,0.4); }
@@ -302,6 +307,7 @@ function buildLeafletHTML(stations: MapStationNode[], activeLayer: string): stri
   var colorMap = {
     healthy: '#10B981',
     monitor: '#F59E0B',
+      schedule: '#38BDF8',
     service: '#DC2626',
     nodata: '#94A3B8',
   };
@@ -361,6 +367,7 @@ function buildLeafletHTML(stations: MapStationNode[], activeLayer: string): stri
           '<span class="popup-badge ' + st.status + '">' + st.status.toUpperCase() + '</span>' +
         '</div>' +
         '<div class="popup-city">' + st.city + '</div>' +
+        (st.condition ? '<div style="font-size:10px;color:#475569;margin-bottom:8px">' + st.condition + (st.dataQuality ? ' · ' + st.dataQuality : '') + '</div>' : '') +
         '<div class="popup-health" style="color:' + healthColor + '">' +
           (st.healthScore > 0 ? st.healthScore.toFixed(1) + '%' : '--') +
         '</div>' +
@@ -427,6 +434,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
         let statusKey: MapStationNode['status'] = 'healthy';
         if (pt.status === 'SERVICE_NOW') statusKey = 'service';
         else if (pt.status === 'MONITOR') statusKey = 'monitor';
+        else if (pt.status === 'SCHEDULE') statusKey = 'schedule';
         else if (pt.status === 'NO_DATA') statusKey = 'nodata';
 
         return {
@@ -447,6 +455,8 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           pressure: pt.current_pressure !== null && pt.current_pressure !== undefined ? `${pt.current_pressure.toFixed(1)} hPa` : '1010 hPa',
           humidity: '65%',
           healthScore: pt.health_score || 95.0,
+          dataQuality: pt.data_quality,
+          condition: pt.condition,
           latitude: pt.latitude,
           longitude: pt.longitude,
         };
@@ -466,14 +476,15 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
     );
   }, [displayStations, searchQuery]);
 
-  const getNodeColor = (status: MapStationNode['status']) => {
-    switch (status) {
-      case 'healthy': return Colors.healthy;
-      case 'monitor': return '#F59E0B';
-      case 'service': return Colors.serviceNow;
-      case 'nodata': return Colors.outline;
-    }
+  const nodeColors: Record<MapStationNode['status'], string> = {
+    healthy: Colors.healthy,
+    monitor: '#F59E0B',
+    schedule: '#0284C7',
+    service: Colors.serviceNow,
+    nodata: Colors.outline,
   };
+
+  const getNodeColor = (status: MapStationNode['status']) => nodeColors[status];
 
   const leafletHtml = useMemo(
     () => buildLeafletHTML(filteredStations, activeLayer),

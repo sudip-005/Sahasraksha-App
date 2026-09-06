@@ -1,6 +1,13 @@
 import { Reading } from './reading';
 
-export type StationStatus = 'HEALTHY' | 'MONITOR' | 'SERVICE_NOW' | 'NO_DATA';
+export type StationStatus =
+  | 'OK'
+  | 'MONITOR'
+  | 'SCHEDULE'
+  | 'SERVICE NOW'
+  | 'HEALTHY'
+  | 'SERVICE_NOW'
+  | 'NO_DATA';
 
 export interface SensorHealthItem {
   sensor: string;
@@ -22,6 +29,14 @@ export interface StationMapPoint {
   health_score: number;
   current_temp?: number | null;
   current_pressure?: number | null;
+  data_quality?: string | null;
+  condition?: string | null;
+  degradation?: number | null;
+  trend_per_day?: number | null;
+  days_to_threshold?: number | null;
+  high_conf_alerts?: number;
+  alert_rate_pct?: number;
+  rate_vs_network?: number;
 }
 
 export interface StationHealthSummary {
@@ -38,6 +53,12 @@ export interface StationHealthSummary {
   last_seen: string;
   active_alerts_count: number;
   sensors: SensorHealthItem[];
+  degradation?: number | null;
+  trend_per_day?: number | null;
+  days_to_threshold?: number | null;
+  high_conf_alerts?: number;
+  alert_rate_pct?: number;
+  rate_vs_network?: number;
 }
 
 export interface StationDetail extends StationHealthSummary {

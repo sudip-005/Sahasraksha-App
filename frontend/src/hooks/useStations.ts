@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { stationApi } from '../services/stationApi';
+import { normalizeStation, stationApi, MlStationRecord } from '../services/stationApi';
 import { StationHealthSummary, StationMapPoint } from '../types';
 
 export function useStations(initialStatus: string = 'ALL') {
@@ -26,8 +26,27 @@ export function useStations(initialStatus: string = 'ALL') {
         sort_by: sortBy,
         order,
       });
-      setStations(res.items);
-      setTotal(res.total);
+      const records = Array.isArray(res)
+        ? (res as MlStationRecord[]).map(normalizeStation)
+        : res.items.map(normalizeStation);
+      const mapResponse = await stationApi.getMapPoints();
+      setStations(records);
+      setTotal(Array.isArray(res) ? records.length : res.total);
+      setMapPoints(mapResponse.length > 0 ? mapResponse : records.map((station) => ({
+        id: station.id,
+        name: station.name,
+        code: station.code,
+        latitude: station.latitude,
+        longitude: station.longitude,
+        status: station.status,
+        health_score: station.health_score,
+        degradation: station.degradation,
+        trend_per_day: station.trend_per_day,
+        days_to_threshold: station.days_to_threshold,
+        high_conf_alerts: station.high_conf_alerts,
+        alert_rate_pct: station.alert_rate_pct,
+        rate_vs_network: station.rate_vs_network,
+      })));
     } catch (err: any) {
       setError(err.message || 'Failed to fetch stations');
     } finally {
@@ -35,22 +54,9 @@ export function useStations(initialStatus: string = 'ALL') {
     }
   }, [search, status, page, sortBy, order]);
 
-  const fetchMapPoints = useCallback(async () => {
-    try {
-      const points = await stationApi.getMapPoints();
-      setMapPoints(points);
-    } catch {
-      // ignore
-    }
-  }, []);
-
   useEffect(() => {
     fetchStations();
   }, [fetchStations]);
-
-  useEffect(() => {
-    fetchMapPoints();
-  }, [fetchMapPoints]);
 
   return {
     stations,
@@ -69,6 +75,6 @@ export function useStations(initialStatus: string = 'ALL') {
     loading,
     error,
     refetch: fetchStations,
-    refetchMap: fetchMapPoints,
+    refetchMap: fetchStations,
   };
 }

@@ -19,6 +19,12 @@ def test_get_stations_map(client):
     assert "longitude" in first
     assert "status" in first
 
+    ml_point = next(point for point in points if point["id"] == "42111099999")
+    assert ml_point["latitude"] == 30.317
+    assert ml_point["longitude"] == 78.033
+    assert ml_point["health_score"] == 97.1
+    assert ml_point["condition"] == "Healthy data coverage"
+
 def test_get_station_detail(client):
     response = client.get("/api/v1/stations/AWS_DEL_01")
     assert response.status_code == 200
