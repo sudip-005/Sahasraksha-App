@@ -156,8 +156,8 @@ IMD_STATIONS = [
 ]
 
 
-def _load_skyguard_stations():
-    csv_path = Path(__file__).resolve().parents[3] / "ml" / "data" / "skyguard_station_coords.csv"
+def _load_sahasraksha_stations():
+    csv_path = Path(__file__).resolve().parents[3] / "ml" / "data" / "sahasraksha_all_stations_coords.csv"
     if not csv_path.exists():
         return []
 
@@ -191,8 +191,8 @@ def _load_skyguard_stations():
     return stations
 
 
-def _add_skyguard_stations(db: Session, now: datetime):
-    stations = _load_skyguard_stations()
+def _add_sahasraksha_stations(db: Session, now: datetime):
+    stations = _load_sahasraksha_stations()
     added = 0
     for station_info in stations:
         if db.query(Station).filter(Station.id == station_info["id"]).first():
@@ -211,7 +211,7 @@ def _add_skyguard_stations(db: Session, now: datetime):
             health_score=station_info["health_score"],
             last_seen=now,
             created_at=now,
-            sensors_config={"source": "skyguard_station_coords.csv", "data_quality": station_info["data_quality"]}
+            sensors_config={"source": "sahasraksha_all_stations_coords.csv", "data_quality": station_info["data_quality"]}
         ))
         added += 1
 
@@ -227,7 +227,7 @@ def seed_database(db: Session):
     existing_count = db.query(Station).count()
     if existing_count > 0:
         logger.info(f"Database already contains {existing_count} stations. Skipping seed.")
-        _add_skyguard_stations(db, datetime.utcnow())
+        _add_sahasraksha_stations(db, datetime.utcnow())
         return
 
     logger.info(f"Seeding {len(IMD_STATIONS)} IMD Automatic Weather Stations...")
@@ -258,7 +258,7 @@ def seed_database(db: Session):
 
     db.commit()
 
-    _add_skyguard_stations(db, now)
+    _add_sahasraksha_stations(db, now)
 
     # Generate 48 hours of time-series readings for active stations
     logger.info("Generating 48-hour continuous time-series sensor readings...")

@@ -96,7 +96,7 @@ class StationService:
     def get_map_points(db: Session) -> List[StationMapPoint]:
         stations = [
             station for station in db.query(Station).all()
-            if (station.sensors_config or {}).get("source") == "skyguard_station_coords.csv"
+            if (station.sensors_config or {}).get("source") == "sahasraksha_all_stations_coords.csv"
         ]
         points = []
         for st in stations:

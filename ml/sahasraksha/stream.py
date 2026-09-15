@@ -55,14 +55,18 @@ def design_row(lst, doy, n_diurnal=3):
     return np.asarray(r)
 
 
-class StreamingSkyGuard:
+class StreamingSahasraksha:
     """
     Online detector. `update()` consumes one observation and returns a verdict
     immediately -- no lookahead, no batch, no refit.
     """
 
     def __init__(self, coeffs, alpha=0.02, tide_alpha=0.01,
-                 cusum_k=1.5, cusum_h=12.0, z_cut=4.0, deg_cut=0.45):
+                 cusum_k=3.0, cusum_h=12.0, z_cut=4.0, deg_cut=0.45):
+        # cusum_k=1.5 previously sat BELOW the measured residual noise floor
+        # (mean |z| ~ 0.87-1.00 across channels), causing the accumulator to
+        # climb on clean data and latch permanently. Verified against the
+        # same noise measurement used to fix the batch pipeline's CUSUM.
         self.states = {sid: StationState(b) for sid, b in coeffs.items()}
         self.alpha, self.tide_alpha = alpha, tide_alpha
         self.k, self.h, self.z_cut, self.deg_cut = cusum_k, cusum_h, z_cut, deg_cut
