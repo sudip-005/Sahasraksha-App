@@ -311,7 +311,7 @@ export const MapScreen: React.FC<MapScreenProps> = ({ navigation }) => {
           temp: pt.current_temp !== null && pt.current_temp !== undefined ? `${pt.current_temp.toFixed(1)}°C` : '27.0°C',
           pressure: pt.current_pressure !== null && pt.current_pressure !== undefined ? `${pt.current_pressure.toFixed(1)} hPa` : '1010 hPa',
           humidity: '65%',
-          healthScore: pt.health_score || 95.0,
+          healthScore: pt.health_score ?? 0,
           dataQuality: pt.data_quality,
           condition: pt.condition,
           latitude: pt.latitude,

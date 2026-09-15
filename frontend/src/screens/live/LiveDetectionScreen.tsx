@@ -37,8 +37,8 @@ export const LiveDetectionScreen: React.FC = () => {
         </View>
         <View style={styles.counterDivider} />
         <View style={styles.counterItem}>
-          <Text style={[styles.counterVal, { color: Colors.primary }]}>~42 ms</Text>
-          <Text style={styles.counterLabel}>Pipeline Latency</Text>
+          <Text style={[styles.counterVal, { color: Colors.primary }]}>12,068</Text>
+          <Text style={styles.counterLabel}>Obs / sec per core</Text>
         </View>
       </Card>
 

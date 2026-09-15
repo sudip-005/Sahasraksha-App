@@ -50,11 +50,11 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
         {/* 1. Hero Health % Card */}
         {overview ? (
           <HeroHealthCard
-            healthPct={overview.network_health_pct || 92.4}
-            totalStations={overview.total_stations || 2595}
-            healthyCount={overview.healthy_stations || 2401}
-            criticalCount={overview.service_now_stations || 51}
-            monitoringCount={overview.monitor_stations || 143}
+            healthPct={overview.network_health_pct ?? 0}
+            totalStations={overview.total_stations ?? 0}
+            healthyCount={overview.healthy_stations ?? 0}
+            criticalCount={overview.service_now_stations ?? 0}
+            monitoringCount={overview.monitor_stations ?? 0}
           />
         ) : (
           <SkeletonLoader height={200} borderRadius={Spacing.radius2xl} />
@@ -67,17 +67,23 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ navigation }) => {
               <MaterialCommunityIcons name="satellite-variant" size={16} color="#FFFFFF" />
               <Text style={styles.bannerTagText}>NATIONWIDE AWS GRID</Text>
             </View>
-            <Text style={styles.bannerHeadline}>Real-Time Sensor Synchrony: 99.4%</Text>
+            <Text style={styles.bannerHeadline}>
+              {overview
+                ? `${overview.total_stations ?? 0} Stations Monitored`
+                : 'Connecting to network'}
+            </Text>
             <Text style={styles.bannerSubhead}>सहस्राक्ष · India National Network</Text>
           </View>
         </View>
 
         {/* 3. Current Network Fleet */}
         <HorizontalMetricCards
-          healthyCount={overview?.healthy_stations || 2401}
-          monitoringCount={overview?.monitor_stations || 143}
-          serviceCount={overview?.service_now_stations || 51}
-          offlineCount={15}
+          healthyCount={overview?.healthy_stations ?? 0}
+          monitoringCount={overview?.monitor_stations ?? 0}
+          serviceCount={overview?.service_now_stations ?? 0}
+          // The API exposes no offline/silent count, so this cannot be
+          // sourced. Showing 0 rather than an invented figure.
+          offlineCount={0}
           onPressCard={(id) => {
             if (id === 'service' || id === 'monitoring') navigation.navigate('Alerts');
             else navigation.navigate('Stations');
