@@ -9,6 +9,7 @@ from ..schemas.station import (
 from ..schemas.reading import ReadingResponse
 from ..schemas.demo import StationDiagnosisResponse
 from .detection_service import DetectionService
+from .sahasraksha_service import SahasrakshaService
 from .heartbeat_service import HeartbeatService
 
 class StationService:
@@ -196,6 +197,24 @@ class StationService:
             ).order_by(desc(Reading.timestamp)).first()
             if r:
                 recent_map[s.id] = r
+
+        # Primary path: the validated Sahasraksha detector. This is the same
+        # StreamingSahasraksha the notebook measures and that compiles to the
+        # ESP32 firmware, so the verdict here matches the published metrics.
+        # The legacy per-layer services remain as a fallback for stations with
+        # too little history to fit a climatology.
+        sah = SahasrakshaService.evaluate(st, readings)
+
+        if sah.available:
+            return StationDiagnosisResponse(
+                station_id=st.id,
+                station_name=st.name,
+                overall_status=SahasrakshaService.status(sah),
+                health_score=SahasrakshaService.health_score(sah),
+                plain_english_summary=SahasrakshaService.summary(sah, st.name),
+                recommended_action=SahasrakshaService.recommended_action(sah),
+                evidence_cards=SahasrakshaService.evidence_cards(sah),
+            )
 
         det_res = DetectionService.evaluate_station(st, readings, all_stations, recent_map)
 
